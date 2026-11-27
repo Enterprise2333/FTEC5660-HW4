@@ -68,4 +68,40 @@ V1 makes row and year associations explicit, but changes the tokens and their di
 
 V6 is the default configuration and corresponds to `results.csv`. It scored 75/75 on the public automatic rubric. All 12 tables, 40 documents, and 180 query fields passed. These measurements use the public corpus. New wording can require lexical matches outside the current metric and company rules.
 
+### Early ablation improvements
+
+These runs use the same 60 public questions, fixed generator, and five-chunk limit as the original ablation. The three baseline reruns reproduced every recorded answer correctness and evidence hit. The company option prepends the company from each chunk's metadata to the text fed to BM25. The normalized option strips possessives, splits fiscal-year prefixes and punctuation, and keeps decimal and grouped numbers intact. The generator receives the original chunks in every run.
+
+| Base | Index option | Recall@5 | Table recall | Fact recall | Comparison recall | Correct answers | Gains / losses vs base |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| B0 | Original | 17/46 | 5/22 | 10/12 | 2/12 | 28/60 | — |
+| B0 | Company | 28/46 | 12/22 | 11/12 | 5/12 | 41/60 | 14 / 1 |
+| B0 | Normalized | 19/46 | 7/22 | 9/12 | 3/12 | 29/60 | 5 / 4 |
+| B0 | Company + normalized | 30/46 | 13/22 | 11/12 | 6/12 | 43/60 | 15 / 0 |
+| V1 | Original | 14/46 | 3/22 | 9/12 | 2/12 | 27/60 | — |
+| V1 | Company | 25/46 | 10/22 | 12/12 | 3/12 | 38/60 | 12 / 1 |
+| V1 | Normalized | 17/46 | 6/22 | 8/12 | 3/12 | 31/60 | 6 / 2 |
+| V1 | Company + normalized | 32/46 | 16/22 | 10/12 | 6/12 | 45/60 | 20 / 2 |
+| V2 | Original | 11/46 | 4/22 | 7/12 | 0/12 | 24/60 | — |
+| V2 | Company | 36/46 | 16/22 | 9/12 | 11/12 | 50/60 | 27 / 1 |
+| V2 | Normalized | 12/46 | 5/22 | 7/12 | 0/12 | 26/60 | 2 / 0 |
+| V2 | Company + normalized | 37/46 | 19/22 | 10/12 | 8/12 | 50/60 | 28 / 2 |
+| V2 | Company + evidence ranking | 45/46 | 22/22 | 11/12 | 12/12 | 55/60 | 33 / 2 |
+| V2 | Company + normalized + evidence ranking | 45/46 | 22/22 | 11/12 | 12/12 | 56/60 | 34 / 2 |
+
+The company index delivered V2's largest gain, adding 26 correct answers. Normalizing that index recovered three more table evidence hits and lost three comparison evidence hits. Evidence ranking reuses V4's metric and period weights on chunks belonging to the companies parsed from the question. It keeps the entire corpus eligible and yields **56/60** with both index options active. The V6 regression run scored **75/75** and answered **60/60**.
+
+- In q002, V2 answered with the rounded amount 1,600. With the company index alone, the first chunk containing 1,574.7 ranked tenth. Normalizing tokens moved that value into the first result, and the generator returned 1,574.7.
+- In the strongest V2 experiment, q027 missed the headquarters evidence for a question without a fiscal year. q035 returned NOT_FOUND despite retrieving the target price, and q050 returned the Americas figure despite retrieving the requested regional row. q044 retrieved data for a similarly named company and returned an answer for a company absent from the corpus.
+
+[Per-question CSVs and runtime logs](ablation/early/) contain the full results. Reproduce the three index experiments across B0, V1, and V2 with the following commands. For an original baseline, use `--index original --variant B0`, substituting V1 or V2 as needed.
+
+~~~sh
+python run_ablation.py --index company --output-dir ablation/early
+python run_ablation.py --index normalized --output-dir ablation/early
+python run_ablation.py --index company-normalized --output-dir ablation/early
+python run_ablation.py --variant V2 --index company --evidence-rank --output-dir ablation/early
+python run_ablation.py --variant V2 --index company-normalized --evidence-rank --output-dir ablation/early
+~~~
+
 [Task 6 reflection](output/pdf/HW4_Reflection.pdf)

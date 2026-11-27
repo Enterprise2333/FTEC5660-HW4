@@ -1,0 +1,32 @@
+40 documents, 60 questions
+
+Task 1.1 table_to_text: 100.0% of the table cells kept with their labels
+Task 1.2 chunk_document: 100.0% of the documents pass
+257 chunks to index
+Index built in 0.4s | {'llm_calls': 0, 'llm_input_tokens': 0, 'llm_output_tokens': 0, 'cost_usd': 0.0}
+Wrote ablation\early\V1-company.csv
+Task 2.1 valid, non-empty retrieval on answerable questions: 100.0%
+Task 2.2 parse_query fields right: 0.0%
+Task 2.3 retrieval recall@5 on answerable questions: 54.3%
+Task 3   answerable questions with chunks: 100.0% | unanswerable questions with []: 0.0%
+Task 4   answer accuracy: 63.3%
+
+By category       accuracy   recall
+  comparison        25.0%    25.0%
+  fact              91.7%   100.0%
+  table             50.0%    45.5%
+  unanswerable      92.9%        -
+
+Estimated points (the grade uses the private set):
+  Task 1.1   8.00 / 8
+  Task 1.2   7.00 / 7
+  Task 2.1   5.00 / 5
+  Task 2.2   0.00 / 10
+  Task 2.3   1.63 / 15
+  Task 3     0.00 / 10
+  Task 4    12.67 / 20
+  Total     34.30 / 75
+
+Your usage: {'llm_calls': 0, 'llm_input_tokens': 0, 'llm_output_tokens': 0, 'cost_usd': 0.0}
+Generator usage: {'llm_calls': 60, 'llm_input_tokens': 129457, 'llm_output_tokens': 184, 'cost_usd': 0.0195}
+Time: 5.6s (index 0.4s, retrieval 0.0s)

@@ -37,6 +37,7 @@ load_dotenv()
 from dataclasses import dataclass
 from functools import lru_cache
 from collections import defaultdict
+from collections.abc import Callable
 
 from bs4 import BeautifulSoup
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -217,6 +218,18 @@ def _tokens(text):
     return tuple(text.casefold().split())
 
 
+# Keep numeric punctuation inside a value. Strip English possessives before
+# splitting so that the last word in a company name matches the corpus.
+_POSSESSIVE = re.compile(r"(?<=\w)['’]s\b")
+_INDEX_TOKEN = re.compile(r"\d+(?:[.,]\d+)*|[^\W\d_]+")
+
+
+@lru_cache(maxsize=4096)
+def _normalized_tokens(text):
+    text = unicodedata.normalize("NFKC", text).casefold()
+    return tuple(_INDEX_TOKEN.findall(_POSSESSIVE.sub("", text)))
+
+
 _WORD = re.compile(r"[a-z0-9]+")
 
 
@@ -258,9 +271,12 @@ class _Index:
     bm25: Any
     by_company: dict
     words: list[str]
+    tokenize: Callable[[str], tuple[str, ...]]
 
 
-def build_index(chunks: list[Document]) -> _Index:
+def build_index(
+    chunks: list[Document], *, index_company: bool = False, normalize_tokens: bool = False,
+) -> _Index:
     _company_names.clear()
     groups = defaultdict(list)
     for i, chunk in enumerate(chunks):
@@ -269,8 +285,16 @@ def build_index(chunks: list[Document]) -> _Index:
             key = company_key(company)
             groups[key].append(i)
             _company_names[key] = company
-    bm25 = BM25Okapi([_tokens(c.page_content) for c in chunks]) if chunks else None
-    return _Index(chunks, bm25, dict(groups), [_words(c.page_content) for c in chunks])
+    tokenize = _normalized_tokens if normalize_tokens else _tokens
+    corpus = []
+    for chunk in chunks:
+        text = chunk.page_content
+        company = chunk.metadata.get("company")
+        if index_company and company:
+            text = f"{company} {text}"
+        corpus.append(tokenize(text))
+    bm25 = BM25Okapi(corpus) if corpus else None
+    return _Index(chunks, bm25, dict(groups), [_words(c.page_content) for c in chunks], tokenize)
 
 
 def _supported_year(chunk, year, kind):
@@ -335,12 +359,17 @@ def _substantive_match(index, ranked, question):
     return len(phrase.split()) < 2 or any(phrase in index.words[i] for i in ranked)
 
 
-def _retrieve(index, question, *, mode):
+def _retrieve(index, question, *, mode, evidence_query=None):
     if not index.chunks:
         return []
-    scores = index.bm25.get_scores(_tokens(question))
+    scores = index.bm25.get_scores(index.tokenize(question))
     if mode < 3:
-        return [index.chunks[i] for i in sorted(range(len(scores)), key=lambda i: -scores[i])[:MAX_RETRIEVED]]
+        if evidence_query and evidence_query["fiscal_year"] and _metric(question):
+            for name in evidence_query["companies"]:
+                for i in index.by_company.get(company_key(name), ()):
+                    scores[i] += _evidence_boost(index, i, question, evidence_query)
+        ranked = sorted(range(len(scores)), key=lambda i: -scores[i])
+        return [index.chunks[i] for i in ranked[:MAX_RETRIEVED]]
     parsed = parse_query(question)
     companies = [company_key(name) for name in parsed["companies"]]
     if mode >= 6 and any(company not in index.by_company for company in companies):
